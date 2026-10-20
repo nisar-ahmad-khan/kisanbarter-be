@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Http\Controllers\Controller;
 use App\Models\Listing;
 use Illuminate\Http\JsonResponse;
@@ -17,19 +18,19 @@ class ListingController extends Controller
         $query = Listing::with(['user', 'images']);
 
         // Filter by trade type (sale, exchange, both)
-        if ($request->has('trade_type')) {
+        if ($request->filled('trade_type')) {
             $query->where('trade_type', $request->trade_type);
         }
 
         // Filter by user district through the relationship
-        if ($request->has('district')) {
+        if ($request->filled('district')) {
             $query->whereHas('user', function ($q) use ($request) {
                 $q->where('district', 'like', '%' . $request->district . '%');
             });
         }
 
         // Search by title or description
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
@@ -38,8 +39,19 @@ class ListingController extends Controller
         }
 
         // Filter by specific user listings
-        if ($request->has('user_id')) {
+        if ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
+        }
+
+        // Filter by status:
+        // If a status is explicitly provided, filter by it (unless 'all' is passed)
+        // By default, if not filtering by user_id, only show active listings
+        if ($request->filled('status')) {
+            if ($request->status !== 'all') {
+                $query->where('status', $request->status);
+            }
+        } elseif (!$request->filled('user_id')) {
+            $query->where('status', 'active');
         }
 
         $listings = $query->latest()->paginate(15);
@@ -58,7 +70,7 @@ class ListingController extends Controller
             'description' => ['required', 'string'],
             'qty' => ['required', 'string', 'max:50'],
             'wanted_description' => ['required', 'string'],
-            'images' => ['required','min:1','array', 'max:5'], // Max 5 images
+            'images' => ['required', 'min:1', 'array', 'max:5'], // Max 5 images
             'images.*' => ['image', 'mimes:jpeg,png,jpg,webp', 'max:2048'], // 2MB max per image
         ]);
 
@@ -67,6 +79,7 @@ class ListingController extends Controller
             'title' => $validated['title'],
             'description' => $validated['description'],
             'qty' => $validated['qty'],
+            'status' => 'active',
             'wanted_description' => $validated['wanted_description'] ?? null,
         ]);
 
@@ -108,6 +121,7 @@ class ListingController extends Controller
 
         $validated = $request->validate([
             'trade_type' => ['sometimes', 'required', 'in:sale,exchange,both'],
+            'status' => ['sometimes', 'required', 'in:active,inactive'],
             'title' => ['sometimes', 'required', 'string', 'max:255'],
             'description' => ['sometimes', 'required', 'string'],
             'qty' => ['sometimes', 'required', 'string', 'max:50'],
@@ -118,6 +132,25 @@ class ListingController extends Controller
 
         return response()->json([
             'message' => 'Listing updated successfully',
+            'listing' => $listing->fresh(['user', 'images']),
+        ]);
+    }
+
+    /**
+     * Toggle the active/inactive status of a listing.
+     */
+    public function toggleStatus(Request $request, Listing $listing): JsonResponse
+    {
+        // Authorization check: only owner can toggle
+        if ($request->user()->id !== $listing->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $newStatus = $listing->status === 'active' ? 'inactive' : 'active';
+        $listing->update(['status' => $newStatus]);
+
+        return response()->json([
+            'message' => "Listing status changed to {$newStatus}",
             'listing' => $listing->fresh(['user', 'images']),
         ]);
     }

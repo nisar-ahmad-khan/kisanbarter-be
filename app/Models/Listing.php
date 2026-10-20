@@ -20,6 +20,13 @@ class Listing extends Model
     protected $table = 'lisitings';
 
     /**
+     * Default model attribute values.
+     */
+    protected $attributes = [
+        'status' => 'active',
+    ];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -29,6 +36,7 @@ class Listing extends Model
         'listing_id',
         'category_id',
         'trade_type',
+        'status',
         'title',
         'description',
         'qty',

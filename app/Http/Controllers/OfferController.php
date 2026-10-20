@@ -45,7 +45,7 @@ class OfferController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'listing_id' => ['required', 'exists:listings,id'],
+            'listing_id' => ['required', 'exists:lisitings,id'],
             'message' => ['nullable', 'string', 'max:1000'],
         ]);
 
